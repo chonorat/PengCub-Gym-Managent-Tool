@@ -1,0 +1,248 @@
+DROP DATABASE Gym;
+CREATE DATABASE Gym;
+USE Gym;
+#################
+###Strong entitys
+#################
+CREATE TABLE exercise(
+	Exercise_Number INT PRIMARY KEY,
+	Descriptor VARCHAR(255),
+	Exercise_Type VARCHAR(255),
+	Exercise_Name VARCHAR(255));
+CREATE TABLE membership(
+	Type VARCHAR(255) ,
+	Fee INT,
+	Guestnumber INT,
+	PRIMARY KEY(Type,Guestnumber));
+CREATE TABlE member(
+	Member_Number INT PRIMARY KEY,
+	Address VARCHAR(255),
+	Member_Name VARCHAR(255),
+	Type VARCHAR(255),
+	Member_Registered_Date DATE,
+	Guestnumber INT,
+	CONSTRAINT FOREIGN KEY(Type,Guestnumber) REFERENCES membership(Type,Guestnumber));
+CREATE TABLE room(
+	Building VARCHAR(255),
+	Room_Number INT,
+	Capacity INT,
+	PRIMARY KEY(Building, Room_Number));
+CREATE TABLE instructor(
+		InstructorID INT PRIMARY KEY,
+		Instructor_Name VARCHAR(255));
+CREATE TABLE employee(
+		InstructorID INT,
+		Salary INT,
+		FOREIGN KEY(InstructorID) REFERENCES instructor(InstructorID));
+CREATE TABLE external(
+		InstructorID INT,
+		Wage INT,
+		FOREIGN KEY(InstructorID) REFERENCES instructor(InstructorID));
+###############
+###Weak entitys
+###############
+CREATE TABLE section(
+	Building VARCHAR(255),
+	Room_Number INT,
+	Exercise_Number INT,
+	InstructorID INT,
+	Duration FLOAT,
+	Class_Date DATE,
+	Class_Start_Time TIME,
+	PRIMARY KEY(InstructorID,Exercise_Number,Room_Number,Building,Class_Date,Class_Start_Time),
+	FOREIGN KEY(Building,Room_Number) REFERENCES room(Building,Room_Number),	
+	FOREIGN KEY(Exercise_Number) REFERENCES exercise(Exercise_Number),
+	FOREIGN KEY(InstructorID) REFERENCES instructor(InstructorID),
+	CONSTRAINT Class_Time UNIQUE (Room_Number,Building,Class_Date,Class_Start_Time),
+	CONSTRAINT Instructor_Time UNIQUE (InstructorID,Class_Date,Class_Start_Time));
+#######################
+###M to N Relations
+#######################
+CREATE TABLE class_registration(
+	Exercise_Number INT,
+	Member_Number INT,
+	Building VARCHAR(255),
+	Room_Number INT,
+	InstructorID INT,
+	Class_Date DATE,
+	Class_Start_Time TIME,
+	Class_Reg_Date DATE,
+	Guests INT,
+	PRIMARY KEY(InstructorID,Exercise_Number,Room_Number,Building,Class_Date,Class_Start_Time,Member_Number),
+	FOREIGN KEY(InstructorID,Exercise_Number,Room_Number,Building,Class_Date,Class_Start_Time) REFERENCES section(InstructorID,Exercise_Number,Room_Number,Building,Class_Date,Class_Start_Time),
+	FOREIGN KEY(Member_Number) REFERENCES member(Member_Number));
+CREATE TABLE external_pay(
+	Year_ INT,
+	Month_ INT,
+	InstructorID INT,
+	Hours FLOAT,
+	Wage FLOAT,
+	Gross_Pay FLOAT AS (Hours * Wage),
+	Fed_Tax FLOAT AS (Gross_Pay*.10),
+	State_Tax FLOAT AS (Gross_Pay * .05),
+	Other_Tax FLOAT AS (Gross_Pay * .03),
+	Net_Pay FLOAT AS (Hours*Wage * .82),
+	FOREIGN KEY(InstructorID) REFERENCES external(InstructorID),
+	CONSTRAINT Monthyear_1 UNIQUE (Month_,Year_,InstructorID));
+CREATE TABLE employee_pay(
+	Year_ INT,
+	Month_ INT,
+	InstructorID INT,
+	Salary FLOAT,
+	Fed_Tax FLOAT AS (Salary*.10/12),
+	State_Tax FLOAT AS (Salary*.05/12),
+	Other_Tax FLOAT AS (Salary*.03/12),
+	Net_Pay FLOAT AS (Salary*.82/12),
+	FOREIGN KEY(InstructorID) REFERENCES employee(InstructorID),
+	CONSTRAINT Monthyear_1 UNIQUE (Month_,Year_,InstructorID));	
+###########
+###Triggers
+###########
+#Personal guest limit   
+   delimiter $$
+    create trigger chk_stats3 before insert on class_registration 
+      for each row 
+       begin  
+      if  NEW.Guests > (SELECT Guestnumber FROM member WHERE NEW.Member_Number=member.Member_Number) then
+       SIGNAL SQLSTATE '45000'   
+       SET MESSAGE_TEXT = 'Cannot add or update row: only';
+       end if; 
+    end; 
+    $$
+#section capacity limit  
+   delimiter $$
+    create trigger chk_capacity before insert on class_registration 
+      for each row 
+       begin  
+      if  (SELECT SUM(class_registration.Guests+1) 
+			FROM class_registration 
+			WHERE NEW.Exercise_Number=class_registration.Exercise_Number
+			AND NEW.Building=class_registration.Building
+			AND NEW.Room_Number=class_registration.Room_Number
+			AND NEW.Class_Date=class_registration.Class_Date
+			AND NEW.Class_Start_Time=class_registration.Class_Start_Time)+(New.Guests+1)
+			>
+			(SELECT Capacity FROM room
+			WHERE NEW.Building=room.Building
+			AND NEW.Room_Number=room.Room_Number)  
+	   THEN
+       SIGNAL SQLSTATE '45000'   
+       SET MESSAGE_TEXT = 'Cannot add or update row: Capacity Exceeded';
+       end if; 
+    end; 
+    $$
+#employee_pay_trigger 
+DELIMITER $$
+create trigger upd_hours after insert on section 
+for each row 
+	IF EXISTS (SELECT InstructorID FROM external WHERE external.InstructorID=NEW.InstructorID)
+	THEN
+		IF EXISTS (SELECT Year_,Month_,InstructorID 
+		FROM external_pay ep 
+		WHERE Year(NEW.Class_Date)=ep.Year_ AND Month(NEW.Class_Date)=ep.Month_ AND NEW.InstructorID=ep.InstructorID)
+		THEN
+							UPDATE external_pay ep 
+							INNER JOIN
+							(SELECT DISTINCT Year(Class_Date) Year_ , Month(Class_Date) Month_ ,InstructorID, SUM(Duration) hour_sum
+							FROM section 
+							GROUP BY InstructorID,Year_,Month_
+							) i ON (ep.InstructorID = i.InstructorID
+									AND ep.Year_ = i.Year_
+									AND ep.Month_ = i.Month_)
+							SET ep.Hours = i.hour_sum;
+		ELSE
+							insert into external_pay(Year_, Month_,InstructorID,Hours)
+							values (Year(NEW.Class_Date),Month(NEW.Class_Date),NEW.InstructorID,NEW.Duration);
+							UPDATE external_pay ep 
+							INNER JOIN
+							(SELECT InstructorID, Wage
+							FROM external 
+							GROUP BY InstructorID
+							) i ON (ep.InstructorID = i.InstructorID)
+							SET ep.Wage = i.Wage;						
+		END IF;
+	ELSE			
+		IF NOT EXISTS (SELECT Year_,Month_,InstructorID 
+		FROM employee_pay ep 
+		WHERE Year(NEW.Class_Date)=ep.Year_ AND Month(NEW.Class_Date)=ep.Month_ AND NEW.InstructorID=ep.InstructorID)
+		THEN
+						insert into employee_pay(Year_, Month_,InstructorID)
+						values (Year(NEW.Class_Date),Month(NEW.Class_Date),NEW.InstructorID);
+						UPDATE employee_pay ep 
+						INNER JOIN
+						(SELECT InstructorID, Salary
+						FROM employee 
+						GROUP BY InstructorID
+						) i ON (ep.InstructorID = i.InstructorID)
+						SET ep.Salary = i.Salary;							
+		end if; 	
+	END IF;
+$$
+DELIMITER ;
+#####################
+###Load Demo data
+#####################
+LOAD DATA INFILE "C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/membership.csv"
+INTO TABLE membership 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n';
+#membership
+LOAD DATA INFILE "C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/member.csv"
+INTO TABLE member 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n';
+#member
+LOAD DATA INFILE "C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/room.csv"
+INTO TABLE room 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n';
+#rooms
+LOAD DATA INFILE "C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/exercise.csv"
+INTO TABLE exercise 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n';
+#exercise
+LOAD DATA INFILE "C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/instructor.csv"
+INTO TABLE instructor 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n'; 
+#internal employees
+LOAD DATA INFILE "C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/employee.csv"
+INTO TABLE employee 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n'; 
+#external employees
+LOAD DATA INFILE "C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/external.csv"
+INTO TABLE external 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n'; 
+#section
+LOAD DATA INFILE "C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/section.csv"
+INTO TABLE section 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n'; 
+#class_registration
+LOAD DATA INFILE "C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/class_registration.csv"
+INTO TABLE class_registration 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n'; 
+#################################
+###Query to retrive open sections
+#################################
+SELECT * 
+FROM section s1
+WHERE (s1.Building,s1.Room_Number,s1.Exercise_Number,s1.InstructorID,s1.Class_Date,s1.Class_Start_Time) NOT IN (
+SELECT f.Building,f.Room_Number,f.Exercise_Number,f.InstructorID,f.Class_Date,f.Class_Start_Time
+FROM 
+(SELECT c.Building,c.Room_Number,c.Exercise_Number,c.InstructorID,c.Class_Date,c.Class_Start_Time,sum(c.Guests)+count(c.InstructorID) sumg
+FROM class_registration c,section s
+WHERE c.Class_Date=s.Class_Date
+AND c.Building=s.Building
+AND s.Room_Number=c.Room_Number
+AND s.InstructorID=c.InstructorID
+AND c.Class_Start_Time=s.Class_Start_Time
+group by c.Building,c.Room_Number,c.Exercise_Number,c.InstructorID,c.Class_Date,c.Class_Start_Time
+) f,room r
+WHERE sumg>=r.Capacity
+AND f.Room_Number=r.Room_Number
+AND f.Building=r.Building);
