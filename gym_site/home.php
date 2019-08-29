@@ -1,0 +1,11 @@
+drop table external_pay;
+drop table employee_pay;
+drop table class_registration;
+drop table section;
+drop table member;
+drop table employee;
+drop table external;
+drop table instructor;
+drop table room;
+drop table membership;
+drop table exercise;
