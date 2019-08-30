@@ -1,0 +1,8 @@
+TYPE=TRIGGERS
+triggers='CREATE DEFINER=`root`@`localhost` trigger upd_hours after insert on section \nfor each row \nIF EXISTS (SELECT InstructorID FROM external WHERE external.InstructorID=NEW.InstructorID)\nTHEN\nIF EXISTS (SELECT Year_,Month_,InstructorID \nFROM external_pay ep \nWHERE Year(NEW.Class_Date)=ep.Year_ AND Month(NEW.Class_Date)=ep.Month_ AND NEW.InstructorID=ep.InstructorID)\nTHEN\nUPDATE external_pay ep \nINNER JOIN\n(SELECT DISTINCT Year(Class_Date) Year_ , Month(Class_Date) Month_ ,InstructorID, SUM(Duration) hour_sum\nFROM section \nGROUP BY InstructorID,Year_,Month_\n) i ON (ep.InstructorID = i.InstructorID\nAND ep.Year_ = i.Year_\nAND ep.Month_ = i.Month_)\nSET ep.Hours = i.hour_sum;\nELSE\ninsert into external_pay(Year_, Month_,InstructorID,Hours)\nvalues (Year(NEW.Class_Date),Month(NEW.Class_Date),NEW.InstructorID,NEW.Duration);\nUPDATE external_pay ep \nINNER JOIN\n(SELECT InstructorID, Wage\nFROM external \nGROUP BY InstructorID\n) i ON (ep.InstructorID = i.InstructorID)\nSET ep.Wage = i.Wage;\nEND IF;\nELSE\nIF NOT EXISTS (SELECT Year_,Month_,InstructorID \nFROM employee_pay ep \nWHERE Year(NEW.Class_Date)=ep.Year_ AND Month(NEW.Class_Date)=ep.Month_ AND NEW.InstructorID=ep.InstructorID)\nTHEN\ninsert into employee_pay(Year_, Month_,InstructorID)\nvalues (Year(NEW.Class_Date),Month(NEW.Class_Date),NEW.InstructorID);\nUPDATE employee_pay ep \nINNER JOIN\n(SELECT InstructorID, Salary\nFROM employee \nGROUP BY InstructorID\n) i ON (ep.InstructorID = i.InstructorID)\nSET ep.Salary = i.Salary;\nend if; \nEND IF'
+sql_modes=1098907648
+definers='root@localhost'
+client_cs_names='cp850'
+connection_cl_names='cp850_general_ci'
+db_cl_names='latin1_swedish_ci'
+created=156702262713
