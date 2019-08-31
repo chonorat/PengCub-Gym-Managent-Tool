@@ -1,0 +1,41 @@
+1.git init
+2.git config user.name chonorat
+3.git config user.email chonorat11@gmail.com
+4.git add *
+5.git commit -m "some init msg"
+
+
+
+https://warm-falls-90071.herokuapp.com/
+heroku login
+git init
+git add .
+git commit -m "delospcemowm"
+git push heroku master
+
+
+
+$servername = "nkpl8b2jg68m87ht.cbetxkdyhwsb.us-east-1.rds.amazonaws.com";
+$username = "akum4kcr49affid7";
+$password = "uw2sosg9brwh9l67";
+$dbname = "dc7uw0q38zv0oo6v";
+mysql://akum4kcr49affid7:uw2sosg9brwh9l67@nkpl8b2jg68m87ht.cbetxkdyhwsb.us-east-1.rds.amazonaws.com/dc7uw0q38zv0oo6v?reconnect=true
+GRANT SUPER ON dbname.* TO user@'localhost' IDENTIFIED BY 'password';
+
+GRANT SUPER ON dc7uw0q38zv0oo6v TO akum4kcr49affid7'nkpl8b2jg68m87ht.cbetxkdyhwsb.us-east-1.rds.amazonaws.com' IDENTIFIED BY 'uw2sosg9brwh9l67';
+FLUSH PRIVILEGES;
+
+
+$servername = "nkpl8b2jg68m87ht.cbetxkdyhwsb.us-east-1.rds.amazonaws.com";
+$username = "akum4kcr49affid7";
+$password = "uw2sosg9brwh9l67";
+$dbname = "dc7uw0q38zv0oo6v";
+
+
+Host	nkpl8b2jg68m87ht.cbetxkdyhwsb.us-east-1.rds.amazonaws.com	
+Username	akum4kcr49affid7	
+Password	uw2sosg9brwh9l67	
+Port	3306	
+Database	dc7uw0q38zv0oo6v
+
+limitless-plains-13330
